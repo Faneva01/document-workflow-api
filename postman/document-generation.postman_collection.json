@@ -1,0 +1,71 @@
+{
+  "info": {
+    "name": "Document Generation Platform",
+    "_postman_id": "8db12a19-94db-4a39-a3be-9944b3ff7e85",
+    "description": "Collection for the document generation platform API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Batch",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-idempotency-key",
+            "value": "demo-batch-001"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userIds\": [\"user-1\", \"user-2\"],\n  \"documentType\": \"cerfa\",\n  \"priority\": 3\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/documents/batch",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "documents", "batch"]
+        }
+      }
+    },
+    {
+      "name": "Get Batch",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/documents/batch/{{batchId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "documents", "batch", "{{batchId}}"]
+        }
+      }
+    },
+    {
+      "name": "Download Document",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/documents/{{documentId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "documents", "{{documentId}}"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "batchId",
+      "value": ""
+    },
+    {
+      "key": "documentId",
+      "value": ""
+    }
+  ]
+}
