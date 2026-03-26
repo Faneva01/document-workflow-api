@@ -1,0 +1,254 @@
+DOCUMENT GENERATION PLATFORM - ARCHITECTURE
+
+1. OVERVIEW
+
+The system is designed as a layered backend for large-scale asynchronous PDF generation.
+
+Main flow:
+Client -> API -> Application Use Cases -> Queue -> Worker -> Worker Thread -> GridFS
+
+
+2. LAYERS
+
+Presentation Layer
+- Express routes
+- Controllers
+- Request validation
+- Error handling middleware
+- Security middleware
+
+Application Layer
+- Use cases
+- DTOs
+- Service orchestration
+- Ports/interfaces
+
+Domain Layer
+- Entities
+- Batch/document statuses
+- Business rules
+
+Infrastructure Layer
+- MongoDB repositories
+- GridFS storage
+- Redis/Bull queue
+- In-memory fallback queue
+- Logging
+- Metrics
+- Health checks
+- Worker thread PDF generation
+- External service simulation
+
+
+3. MAIN COMPONENTS
+
+API
+- Accepts batch creation requests
+- Exposes batch/document retrieval endpoints
+- Applies validation, rate limiting, logging, and observability
+
+MongoDB
+- Stores batch metadata
+- Stores document metadata
+- Stores generated PDF files through GridFS
+
+Redis + Bull
+- Handles distributed asynchronous job processing
+- Supports concurrency, retries, and job priority
+
+Worker Process
+- Consumes queue jobs
+- Executes the document generation use case
+- Sends failed terminal jobs to the dead letter queue
+
+Worker Thread
+- Generates the PDF outside the main Node.js event loop
+- Prevents CPU-heavy PDF generation from blocking HTTP handling
+
+
+4. REQUEST FLOW
+
+POST /api/documents/batch
+1. Validate payload
+2. Sanitize userIds
+3. Check queue backpressure
+4. Resolve idempotency key
+5. Create batch metadata in MongoDB
+6. Create document metadata in MongoDB
+7. Enqueue one job per document
+8. Return batchId immediately
+
+GET /api/documents/batch/:batchId
+1. Read batch metadata
+2. Read related documents
+3. Return processing state
+
+GET /api/documents/:documentId
+1. Read document metadata
+2. Read PDF stream from GridFS
+3. Stream PDF back to the client
+
+
+5. WORKER FLOW
+
+1. Receive a Bull job
+2. Mark document as processing
+3. Call simulated external signature service through circuit breaker
+4. Render the template
+5. Generate PDF through a worker thread
+6. Stream the PDF file into GridFS
+7. Mark document as completed
+8. Update batch counters
+9. Finalize batch status when all documents are terminal
+
+If a failure happens:
+- Bull retries the job with exponential backoff
+- After final failure, the job is sent to the dead letter queue
+
+
+6. RESILIENCE
+
+- Retry x3 with exponential backoff
+- PDF timeout
+- Circuit breaker for external dependency simulation
+- Dead letter queue
+- Graceful shutdown
+- Redis in-memory fallback for degraded mode
+- Idempotent batch creation
+- Queue backpressure threshold
+
+
+7. OBSERVABILITY
+
+- Structured JSON logs
+- Correlation ID
+- Batch ID and document ID propagation
+- Prometheus metrics
+- Health endpoint
+
+
+8. SECURITY
+
+- Helmet
+- Rate limiting
+- Input validation with Zod
+- Input sanitization
+- Environment-based configuration
+
+
+9. DEPLOYMENT MODEL
+
+Recommended mode:
+- Docker Compose starts API, worker, MongoDB, and Redis together
+
+Optional mode:
+- Local Node.js startup, only if MongoDB and Redis are already installed or available externally
+
+
+10. FILE ORGANIZATION SCHEMA
+
+src/
+  application/
+    dto/
+      batch-response.dto.ts
+      create-batch.dto.ts
+    ports/
+      batch-repository.ts
+      document-repository.ts
+      document-storage.ts
+      external-signature-service.ts
+      health-indicator.ts
+      job-dispatcher.ts
+      template-renderer.ts
+    services/
+      idempotency.service.ts
+    use-cases/
+      create-batch.use-case.ts
+      generate-document.use-case.ts
+      get-batch.use-case.ts
+      get-document.use-case.ts
+
+  domain/
+    entities/
+      batch.ts
+      document.ts
+    enums/
+      batch-status.ts
+      document-status.ts
+
+  infrastructure/
+    config/
+      env.ts
+      openapi.ts
+    db/
+      mongo-client.ts
+      gridfs/
+        gridfs-storage.ts
+    external/
+      simulated-signature.service.ts
+    health/
+      health.service.ts
+    logging/
+      logger.ts
+    metrics/
+      metrics-registry.ts
+    queue/
+      bull-job-dispatcher.ts
+      in-memory-processor.ts
+      memory-job-dispatcher.ts
+    repositories/
+      mongo-batch.repository.ts
+      mongo-document.repository.ts
+    resilience/
+      circuit-breaker.ts
+    templates/
+      template-registry.ts
+    threads/
+      pdf-renderer.worker.ts
+      pdf-thread-runner.ts
+    validation/
+      sanitizers.ts
+    container.ts
+
+  presentation/
+    controllers/
+      document.controller.ts
+    middlewares/
+      error-handler.middleware.ts
+      request-context.middleware.ts
+      validate-request.middleware.ts
+    routes/
+      document.routes.ts
+    schemas/
+      document.schemas.ts
+
+  shared/
+    errors/
+      app-error.ts
+      error-codes.ts
+    types/
+      request-context.ts
+    utils/
+      async.ts
+      crypto.ts
+      time.ts
+
+  workers/
+    queue.worker.ts
+
+  app.ts
+  server.ts
+
+tests/
+  integration/
+  unit/
+
+scripts/
+  benchmark.ts
+
+docs/
+  architecture.txt
+  curl-examples.sh
+
+postman/
+  document-generation.postman_collection.json
